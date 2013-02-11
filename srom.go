@@ -6,20 +6,22 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/darkhelmet/env"
+	"github.com/jmcvetta/restclient"
+	"github.com/stathat/go"
 	"log"
 	"net/url"
-	"strconv"
-	"time"
-	// "github.com/darkhelmet/env"
-	"github.com/opesun/goquery"
-	// "github.com/stathat/go"
 	"runtime"
+	"strconv"
 	"strings"
+	"time"
 )
 
 const (
-	searchBase = "https://encrypted.google.com/search"
+	apiBase = "https://www.googleapis.com/customsearch/v1"
 )
+
+var ()
 
 func init() {
 	log.SetFlags(log.Ltime | log.Lshortfile)
@@ -27,10 +29,39 @@ func init() {
 
 // Srom is a Sucks-Rules-O-Meter.
 type Srom struct {
-	Terms    []string
-	Positive []string
-	Negative []string
-	MaxProcs int
+	Terms          []string   // List of terms to be evaluated
+	Positive       []string   // Templates for constructing positive queries
+	Negative       []string   // Templates for constructing negative queries
+	Logger         StatLogger // S/R stats are written to Logger
+	MaxProcs       int        // Maximum processQuery() goroutines
+	apiKey         string     // Google API key
+	customSearchId string     // Google Custom Search identifier
+	client         *restclient.Client
+}
+
+type StatLogger interface {
+	Log(term string, pos, neg int) error
+}
+
+type statHatLogger struct {
+	ezkey string
+}
+
+func (s *statHatLogger) Log(term string, pos, neg int) error {
+	ratio := float64(pos) / float64(neg)
+	name := "SROM -- " + term
+	log.Println("Logging to StatHat:", term, pos, neg, ratio)
+	return stathat.PostEZValue(name, s.ezkey, ratio)
+	/*
+		err := stathat.PostEZValue(base+"pos", s.ezkey, float64(pos))
+		if err != nil {
+			return err
+		}
+		err = stathat.PostEZValue(base+"neg", s.ezkey, float64(neg))
+		if err != nil {
+			return err
+		}
+	*/
 }
 
 type job struct {
@@ -40,33 +71,48 @@ type job struct {
 	Negative  int
 }
 
-func scrape(query string) (hits int, err error) {
-	u, err := url.Parse(searchBase)
+func (sr *Srom) google(query string) (hits int, err error) {
+	u, err := url.Parse(apiBase)
 	if err != nil {
 		return -1, err
 	}
 	v := url.Values{}
+	v.Set("key", sr.apiKey)
+	v.Set("cx", sr.customSearchId)
 	v.Set("q", query)
 	u.RawQuery = v.Encode()
-	nodes, err := goquery.ParseUrl(u.String())
+	resp := struct {
+		Queries struct {
+			Request []struct {
+				TotalResults string `json:"totalResults"`
+			} `json:"requests"`
+		} `json:"queries"`
+	}{}
+	e := new(interface{})
+	req := restclient.RestRequest{
+		Url:    u.String(),
+		Method: restclient.GET,
+		Result: &resp,
+		Error:  e,
+	}
+	status, err := sr.client.Do(&req)
 	if err != nil {
 		return -1, err
 	}
-	resultStats := nodes.Find("#resultStats").Html()
-	s := strings.Split(resultStats, " ")
-	if len(s) != 3 {
-		err = errors.New("Could not parse Google response")
+	if status != 200 {
+		err = errors.New(fmt.Sprintf("Bad response code from Google: %v", status))
 		return -1, err
 	}
-	countString := s[1]
-	countString = strings.Replace(countString, ",", "", -1)
-	count, err := strconv.Atoi(countString)
+	if len(resp.Queries.Request) < 1 {
+		err = errors.New("Could not parse JSON response from Google.")
+		return -1, err
+	}
+	count, err := strconv.Atoi(resp.Queries.Request[0].TotalResults)
 	if err != nil {
 		return -1, err
 	}
 	return count, nil
 }
-
 func (sr *Srom) processQuery(in, out chan *job) {
 	for {
 		j := <-in
@@ -74,21 +120,23 @@ func (sr *Srom) processQuery(in, out chan *job) {
 		j.Timestamp = time.Now()
 		posQuery := buildQuery(j.Term, sr.Positive)
 		negQuery := buildQuery(j.Term, sr.Negative)
-		posCount, err := scrape(posQuery)
+		log.Println(posQuery)
+		posCount, err := sr.google(posQuery)
 		if err != nil {
 			log.Println("Could not scrape:", err)
-			continue
+			out <- j
 		}
-		negCount, err := scrape(negQuery)
+		negCount, err := sr.google(negQuery)
 		if err != nil {
 			log.Println("Could not scrape:", err)
-			continue
+			out <- j
 		}
 		msg := strings.Repeat("-", 80) + "\n"
 		msg += j.Term + "\n"
 		msg += fmt.Sprintln("\t Positive:", posCount)
 		msg += fmt.Sprintln("\t Negative:", negCount)
 		log.Println(msg)
+		sr.Logger.Log(j.Term, posCount, negCount)
 		out <- j
 	}
 	log.Println("Bye")
@@ -152,6 +200,14 @@ func main() {
 		"%v doesn't work",
 		"hate %v",
 	}
+	sr.Logger = &statHatLogger{
+		ezkey: env.StringDefault("STATHAT_EZKEY", "jason.mcvetta@gmail.com"),
+	}
 	sr.MaxProcs = runtime.NumCPU() * 4
+	sr.apiKey = env.String("GOOGLE_API_KEY")
+	sr.customSearchId = env.String("GOOGLE_CUSTOM_SEARCH_ID")
+	sr.client = restclient.New()
 	sr.Run()
+	stathat.WaitUntilFinished(time.Second * 60)
+
 }
