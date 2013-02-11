@@ -29,25 +29,25 @@ func init() {
 
 // Srom is a Sucks-Rules-O-Meter.
 type Srom struct {
-	Terms          []string   // List of terms to be evaluated
-	Positive       []string   // Templates for constructing positive queries
-	Negative       []string   // Templates for constructing negative queries
-	Logger         StatLogger // S/R stats are written to Logger
-	MaxProcs       int        // Maximum processQuery() goroutines
-	apiKey         string     // Google API key
-	customSearchId string     // Google Custom Search identifier
+	Terms          []string // List of terms to be evaluated
+	Positive       []string // Templates for constructing positive queries
+	Negative       []string // Templates for constructing negative queries
+	Storage        Storage  // S/R stats are written to Storage
+	MaxProcs       int      // Maximum processQuery() goroutines
+	apiKey         string   // Google API key
+	customSearchId string   // Google Custom Search identifier
 	client         *restclient.Client
 }
 
-type StatLogger interface {
-	Log(term string, pos, neg int) error
+type Storage interface {
+	Write(term string, pos, neg int) error
 }
 
 type statHatLogger struct {
 	ezkey string
 }
 
-func (s *statHatLogger) Log(term string, pos, neg int) error {
+func (s *statHatLogger) Write(term string, pos, neg int) error {
 	ratio := float64(pos) / float64(neg)
 	name := "SROM -- " + term
 	log.Println("Logging to StatHat:", term, pos, neg, ratio)
