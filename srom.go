@@ -136,7 +136,7 @@ func (sr *Srom) processQuery(in, out chan *job) {
 		msg += fmt.Sprintln("\t Positive:", posCount)
 		msg += fmt.Sprintln("\t Negative:", negCount)
 		log.Println(msg)
-		sr.Logger.Log(j.Term, posCount, negCount)
+		sr.Storage.Write(j.Term, posCount, negCount)
 		out <- j
 	}
 	log.Println("Bye")
@@ -200,7 +200,7 @@ func main() {
 		"%v doesn't work",
 		"hate %v",
 	}
-	sr.Logger = &statHatLogger{
+	sr.Storage = &statHatLogger{
 		ezkey: env.StringDefault("STATHAT_EZKEY", "jason.mcvetta@gmail.com"),
 	}
 	sr.MaxProcs = runtime.NumCPU() * 4
