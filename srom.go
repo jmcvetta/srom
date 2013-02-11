@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"github.com/darkhelmet/env"
 	"github.com/jmcvetta/restclient"
-	"github.com/stathat/go"
+	"labix.org/v2/mgo"
 	"log"
 	"net/url"
 	"runtime"
@@ -40,28 +40,15 @@ type Srom struct {
 }
 
 type Storage interface {
-	Write(term string, pos, neg int) error
+	Write(j *job) error
 }
 
-type statHatLogger struct {
-	ezkey string
+type mongoStorage struct {
+	col *mgo.Collection
 }
 
-func (s *statHatLogger) Write(term string, pos, neg int) error {
-	ratio := float64(pos) / float64(neg)
-	name := "SROM -- " + term
-	log.Println("Logging to StatHat:", term, pos, neg, ratio)
-	return stathat.PostEZValue(name, s.ezkey, ratio)
-	/*
-		err := stathat.PostEZValue(base+"pos", s.ezkey, float64(pos))
-		if err != nil {
-			return err
-		}
-		err = stathat.PostEZValue(base+"neg", s.ezkey, float64(neg))
-		if err != nil {
-			return err
-		}
-	*/
+func (m *mongoStorage) Write(j *job) error {
+	return m.col.Insert(&j)
 }
 
 type job struct {
@@ -69,6 +56,7 @@ type job struct {
 	Timestamp time.Time
 	Positive  int
 	Negative  int
+	Ratio     float64
 }
 
 func (sr *Srom) google(query string) (hits int, err error) {
@@ -116,27 +104,29 @@ func (sr *Srom) google(query string) (hits int, err error) {
 func (sr *Srom) processQuery(in, out chan *job) {
 	for {
 		j := <-in
-		log.Println(j)
 		j.Timestamp = time.Now()
 		posQuery := buildQuery(j.Term, sr.Positive)
 		negQuery := buildQuery(j.Term, sr.Negative)
-		log.Println(posQuery)
-		posCount, err := sr.google(posQuery)
+		var err error
+		j.Positive, err = sr.google(posQuery)
 		if err != nil {
 			log.Println("Could not scrape:", err)
 			out <- j
 		}
-		negCount, err := sr.google(negQuery)
+		j.Negative, err = sr.google(negQuery)
 		if err != nil {
 			log.Println("Could not scrape:", err)
 			out <- j
 		}
-		msg := strings.Repeat("-", 80) + "\n"
+		j.Ratio = float64(j.Positive) / float64(j.Negative)
+		msg := "\n"
+		msg += strings.Repeat("-", 80) + "\n"
 		msg += j.Term + "\n"
-		msg += fmt.Sprintln("\t Positive:", posCount)
-		msg += fmt.Sprintln("\t Negative:", negCount)
+		msg += fmt.Sprintln("\t Positive:", j.Positive)
+		msg += fmt.Sprintln("\t Negative:", j.Negative)
+		msg += fmt.Sprintln("\t Ratio:", j.Ratio)
 		log.Println(msg)
-		sr.Storage.Write(j.Term, posCount, negCount)
+		sr.Storage.Write(j)
 		out <- j
 	}
 	log.Println("Bye")
@@ -172,6 +162,44 @@ func (sr *Srom) Run() {
 }
 
 func main() {
+	//
+	// Setup MongoDB
+	//
+	mongoUrl := env.StringDefault("MONGOLAB_URI", "localhost")
+	log.Println("Connecting to MongoDB on " + mongoUrl + "...")
+	session, err := mgo.Dial(mongoUrl)
+	if err != nil {
+		log.Panic(err)
+	}
+	defer session.Close()
+	db := session.DB("")
+	_, err = db.CollectionNames()
+	if err != nil {
+		log.Println("Setting db name to 'SROM'.")
+		db = session.DB("SROM")
+	}
+	collection := db.C("terms")
+	termIdx := mgo.Index{
+		Key:        []string{"Term", "Timestamp"},
+		Unique:     false,
+		Background: true,
+	}
+	err = collection.EnsureIndex(termIdx)
+	if err != nil {
+		log.Panic(err)
+	}
+	ratioIdx := mgo.Index{
+		Key:        []string{"Ratio", "Timestamp"},
+		Unique:     false,
+		Background: true,
+	}
+	err = collection.EnsureIndex(ratioIdx)
+	if err != nil {
+		log.Panic(err)
+	}
+	//
+	// Instantiate Srom Object
+	//
 	sr := Srom{}
 	sr.Terms = []string{
 		"ubuntu",
@@ -182,7 +210,7 @@ func main() {
 		"iPhone",
 		"android",
 		"iOS",
-		"ed lee",
+		// "ed lee",
 	}
 	sr.Positive = []string{
 		"%v rules",
@@ -200,14 +228,15 @@ func main() {
 		"%v doesn't work",
 		"hate %v",
 	}
-	sr.Storage = &statHatLogger{
-		ezkey: env.StringDefault("STATHAT_EZKEY", "jason.mcvetta@gmail.com"),
+	sr.Storage = &mongoStorage{
+		col: collection,
 	}
 	sr.MaxProcs = runtime.NumCPU() * 4
 	sr.apiKey = env.String("GOOGLE_API_KEY")
 	sr.customSearchId = env.String("GOOGLE_CUSTOM_SEARCH_ID")
 	sr.client = restclient.New()
+	//
+	// Run
+	//
 	sr.Run()
-	stathat.WaitUntilFinished(time.Second * 60)
-
 }
