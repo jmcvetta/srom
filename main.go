@@ -5,8 +5,8 @@ package main
 
 import (
 	"github.com/darkhelmet/env"
-	"github.com/jmcvetta/srom/srom"
 	"github.com/jmcvetta/restclient"
+	"github.com/jmcvetta/srom/srom"
 	"labix.org/v2/mgo"
 	"log"
 	"runtime"
@@ -63,14 +63,14 @@ func main() {
 	sr.Terms = []string{
 		"ubuntu",
 		/*
-		"obama",
-		"linux",
-		"windows",
-		"apple",
-		"iPhone",
-		"android",
-		"iOS",
-		"ed lee",
+			"obama",
+			"linux",
+			"windows",
+			"apple",
+			"iPhone",
+			"android",
+			"iOS",
+			"ed lee",
 		*/
 	}
 	sr.Positive = []string{
@@ -94,8 +94,8 @@ func main() {
 	}
 	sr.MaxProcs = runtime.NumCPU() * 4
 	sr.SearchEngine = &srom.GoogleSearch{
-		Client: restclient.New(),
-		ApiKey: env.String("GOOGLE_API_KEY"),
+		Client:         restclient.New(),
+		ApiKey:         env.String("GOOGLE_API_KEY"),
 		CustomSearchId: env.String("GOOGLE_CUSTOM_SEARCH_ID"),
 	}
 	// sr.ApiKey = env.String("GOOGLE_API_KEY")

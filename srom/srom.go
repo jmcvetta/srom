@@ -4,10 +4,10 @@
 package srom
 
 import (
-	"strings"
-	"log"
-	"time"
 	"fmt"
+	"log"
+	"strings"
+	"time"
 )
 
 var ()
@@ -18,18 +18,17 @@ func init() {
 
 // Srom is a Sucks-Rules-O-Meter.
 type Srom struct {
-	Terms          []string // List of terms to be evaluated
-	Positive       []string // Templates for constructing positive queries
-	Negative       []string // Templates for constructing negative queries
-	Storage        Storage  // S/R stats are written to Storage
-	SearchEngine   SearchEngine // SearchEngine is used to query the internet
-	MaxProcs       int      // Maximum processQuery() goroutines
+	Terms        []string     // List of terms to be evaluated
+	Positive     []string     // Templates for constructing positive queries
+	Negative     []string     // Templates for constructing negative queries
+	Storage      Storage      // S/R stats are written to Storage
+	SearchEngine SearchEngine // SearchEngine is used to query the internet
+	MaxProcs     int          // Maximum processQuery() goroutines
 }
 
 type Storage interface {
 	Write(j *job) error
 }
-
 
 type SearchEngine interface {
 	Query(term string, templates []string) (hits int, err error)

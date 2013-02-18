@@ -15,4 +15,3 @@ type MongoStorage struct {
 func (m *MongoStorage) Write(j *job) error {
 	return m.Col.Insert(&j)
 }
-

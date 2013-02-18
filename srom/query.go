@@ -16,9 +16,9 @@ const (
 )
 
 type GoogleSearch struct {
-	ApiKey string
+	ApiKey         string
 	CustomSearchId string
-	Client *restclient.Client
+	Client         *restclient.Client
 }
 
 func buildQuery(term string, templates []string) string {
@@ -75,4 +75,3 @@ func (gs *GoogleSearch) Query(term string, templates []string) (hits int, err er
 	}
 	return count, nil
 }
-
