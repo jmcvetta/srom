@@ -15,21 +15,25 @@ const (
 	googleSearchApi = "https://www.googleapis.com/customsearch/v1"
 )
 
-// GoogleSearch uses Google to search the web
 type GoogleSearch struct {
 	ApiKey string
 	CustomSearchId string
 	Client *restclient.Client
 }
 
-func (gs *GoogleSearch) Query(term string, templates []string) (hits int, err error) {
-	query := fmt.Sprintf(templates[0], term)
-	query = fmt.Sprintf("\"%v\"", query)
+func buildQuery(term string, templates []string) string {
+	q := fmt.Sprintf(templates[0], term)
+	q = fmt.Sprintf("\"%v\"", q)
 	for _, tmpl := range templates[1:] {
 		s := fmt.Sprintf(tmpl, term)
 		s = fmt.Sprintf(" OR \"%v\"", s)
-		query += s
+		q += s
 	}
+	return q
+}
+
+func (gs *GoogleSearch) Query(term string, templates []string) (hits int, err error) {
+	query := buildQuery(term, templates)
 	u, err := url.Parse(googleSearchApi)
 	if err != nil {
 		return -1, err
