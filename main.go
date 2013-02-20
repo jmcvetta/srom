@@ -11,10 +11,6 @@ import (
 	"runtime"
 )
 
-const (
-	apiBase = "https://www.googleapis.com/customsearch/v1"
-)
-
 func init() {
 	log.SetFlags(log.Ltime | log.Lshortfile)
 }
@@ -42,6 +38,7 @@ func main() {
 		Unique:     false,
 		Background: true,
 	}
+	log.Println("Ensuring Term, Timestamp index")
 	err = collection.EnsureIndex(termIdx)
 	if err != nil {
 		log.Panic(err)
@@ -51,6 +48,7 @@ func main() {
 		Unique:     false,
 		Background: true,
 	}
+	log.Println("Ensuring Ratio, Timestamp index")
 	err = collection.EnsureIndex(ratioIdx)
 	if err != nil {
 		log.Panic(err)
@@ -109,5 +107,6 @@ func main() {
 	//
 	// Run
 	//
+	log.Println("Running SROM")
 	sr.Run()
 }
