@@ -61,16 +61,14 @@ func main() {
 	sr := srom.Srom{}
 	sr.Terms = []string{
 		"ubuntu",
-		/*
-			"obama",
-			"linux",
-			"windows",
-			"apple",
-			"iPhone",
-			"android",
-			"iOS",
-			"ed lee",
-		*/
+		"obama",
+		"linux",
+		"windows",
+		"apple",
+		"iPhone",
+		"android",
+		"iOS",
+		// "ed lee",
 	}
 	sr.Positive = []string{
 		"%v rules",

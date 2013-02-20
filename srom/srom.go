@@ -31,21 +31,24 @@ type Storage interface {
 }
 
 type SearchEngine interface {
+	ServiceName() string
 	Query(term string, templates []string) (hits int, err error)
 }
 
 type job struct {
-	Term      string
-	Timestamp time.Time
-	Positive  int
-	Negative  int
-	Ratio     float64
+	Term        string
+	Timestamp   time.Time
+	ServiceName string
+	Positive    int
+	Negative    int
+	Ratio       float64
 }
 
 func (sr *Srom) processQuery(in, out chan *job) {
 	for {
 		j := <-in
 		j.Timestamp = time.Now()
+		j.ServiceName = sr.SearchEngine.ServiceName()
 		var err error
 		j.Positive, err = sr.SearchEngine.Query(j.Term, sr.Positive)
 		if err != nil {

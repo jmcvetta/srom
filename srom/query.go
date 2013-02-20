@@ -37,6 +37,10 @@ type GoogleSearch struct {
 	CustomSearchId string
 }
 
+func (gs *GoogleSearch) ServiceName() string {
+	return "Google Custom Search"
+}
+
 func (gs *GoogleSearch) Query(term string, templates []string) (hits int, err error) {
 	query := buildQuery(term, templates)
 	u, err := url.Parse(googleSearchApi)
@@ -86,6 +90,10 @@ type BingSearch struct {
 	Key        string
 }
 
+func (bs *BingSearch) ServiceName() string {
+	return "Azure Data Market"
+}
+
 func (bs *BingSearch) Query(term string, templates []string) (hits int, err error) {
 	query := buildQuery(term, templates)
 	query = fmt.Sprintf("'%v'", query) // Enclose in single quote marks
@@ -106,7 +114,7 @@ func (bs *BingSearch) Query(term string, templates []string) (hits int, err erro
 		Method:   restclient.GET,
 		Userinfo: url.UserPassword(bs.CustomerId, bs.Key),
 		Params:   payload,
-		Result:   resp,
+		Result:   &resp,
 	}
 	// r.json['d']['results'][0]['WebTotal']
 	status, err := restclient.Do(&req)
