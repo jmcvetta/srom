@@ -5,7 +5,6 @@ package main
 
 import (
 	"github.com/darkhelmet/env"
-	"github.com/jmcvetta/restclient"
 	"github.com/jmcvetta/srom/srom"
 	"labix.org/v2/mgo"
 	"log"
@@ -93,10 +92,18 @@ func main() {
 		Col: collection,
 	}
 	sr.MaxProcs = runtime.NumCPU() * 4
-	sr.SearchEngine = &srom.GoogleSearch{
-		Client:         restclient.New(),
-		ApiKey:         env.String("GOOGLE_API_KEY"),
-		CustomSearchId: env.String("GOOGLE_CUSTOM_SEARCH_ID"),
+	//
+	// Search engines
+	//
+	/*
+		sr.SearchEngine = &srom.GoogleSearch{
+			ApiKey:         env.String("GOOGLE_API_KEY"),
+			CustomSearchId: env.String("GOOGLE_CUSTOM_SEARCH_ID"),
+		}
+	*/
+	sr.SearchEngine = &srom.BingSearch{
+		CustomerId: env.String("AZURE_CUST_ID"),
+		Key:        env.String("AZURE_KEY"),
 	}
 	// sr.ApiKey = env.String("GOOGLE_API_KEY")
 	// sr.CustomSearchId = env.String("GOOGLE_CUSTOM_SEARCH_ID")

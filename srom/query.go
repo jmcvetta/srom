@@ -7,19 +7,19 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jmcvetta/restclient"
+	"log"
 	"net/url"
 	"strconv"
 )
 
 const (
 	googleSearchApi = "https://www.googleapis.com/customsearch/v1"
+	bingSearchApi   = "https://api.datamarket.azure.com/Bing/Search/v1/Composite"
 )
 
-type GoogleSearch struct {
-	ApiKey         string
-	CustomSearchId string
-	Client         *restclient.Client
-}
+var (
+	BadResponse = errors.New("Bad response code from server.")
+)
 
 func buildQuery(term string, templates []string) string {
 	q := fmt.Sprintf(templates[0], term)
@@ -30,6 +30,11 @@ func buildQuery(term string, templates []string) string {
 		q += s
 	}
 	return q
+}
+
+type GoogleSearch struct {
+	ApiKey         string
+	CustomSearchId string
 }
 
 func (gs *GoogleSearch) Query(term string, templates []string) (hits int, err error) {
@@ -57,21 +62,68 @@ func (gs *GoogleSearch) Query(term string, templates []string) (hits int, err er
 		Result: &resp,
 		Error:  e,
 	}
-	status, err := gs.Client.Do(&req)
+	status, err := restclient.Do(&req)
 	if err != nil {
 		return -1, err
 	}
 	if status != 200 {
-		err = errors.New(fmt.Sprintf("Bad response code from Google: %v", status))
-		return -1, err
+		log.Printf("Bad response code from Google: %v", status)
+		return -1, BadResponse
 	}
 	if len(resp.Queries.Request) < 1 {
 		err = errors.New("Could not parse JSON response from Google.")
-		return -1, err
+		return -1, BadResponse
 	}
 	count, err := strconv.Atoi(resp.Queries.Request[0].TotalResults)
 	if err != nil {
 		return -1, err
 	}
 	return count, nil
+}
+
+type BingSearch struct {
+	CustomerId string
+	Key        string
+}
+
+func (bs *BingSearch) Query(term string, templates []string) (hits int, err error) {
+	query := buildQuery(term, templates)
+	query = fmt.Sprintf("'%v'", query) // Enclose in single quote marks
+	payload := map[string]string{
+		"Sources": "'web'", // Inner single quote marks are required
+		"$format": "json",  // Yes the $ prefix is correct
+		"Query":   query,
+	}
+	resp := struct {
+		D struct {
+			Results []struct {
+				Total string `json:"WebTotal"`
+			} `json:"results"`
+		} `json:"d"`
+	}{}
+	req := restclient.RestRequest{
+		Url:      bingSearchApi,
+		Method:   restclient.GET,
+		Userinfo: url.UserPassword(bs.CustomerId, bs.Key),
+		Params:   payload,
+		Result:   resp,
+	}
+	// r.json['d']['results'][0]['WebTotal']
+	status, err := restclient.Do(&req)
+	if err != nil {
+		return -1, err
+	}
+	if status != 200 {
+		log.Printf("Bad response code from Bing: %v", status)
+		return -1, BadResponse
+	}
+	if len(resp.D.Results) != 1 {
+		log.Printf("Expected single item in results dict, but got", len(resp.D.Results))
+		return -1, BadResponse
+	}
+	hits, err = strconv.Atoi(resp.D.Results[0].Total)
+	if err != nil {
+		return -1, err
+	}
+	return hits, nil
 }
