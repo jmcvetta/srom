@@ -66,7 +66,9 @@ func main() {
 		"iPhone",
 		"android",
 		"iOS",
-		// "ed lee",
+		"ed lee",
+		"kate moss",
+		"richard stallman",
 	}
 	sr.Positive = []string{
 		"%v rules",
@@ -87,7 +89,9 @@ func main() {
 	sr.Storage = &srom.MongoStorage{
 		Col: collection,
 	}
-	sr.MaxProcs = runtime.NumCPU() * 4
+	ncpu := runtime.NumCPU() * 4
+	runtime.GOMAXPROCS(ncpu)
+	sr.MaxProcs = ncpu
 	//
 	// Search engines
 	//
