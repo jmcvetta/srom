@@ -44,21 +44,24 @@ type job struct {
 	Ratio       float64
 }
 
-func (sr *Srom) processQuery(in, out chan *job) {
+func (sr *Srom) processQuery(queue chan *job) {
 	for {
-		j := <-in
+		j := <-queue
+		if j == nil {
+			break
+		}
 		j.Timestamp = time.Now()
 		j.ServiceName = sr.SearchEngine.ServiceName()
 		var err error
 		j.Positive, err = sr.SearchEngine.Query(j.Term, sr.Positive)
 		if err != nil {
 			log.Println("Could not scrape:", err)
-			out <- j
+			continue
 		}
 		j.Negative, err = sr.SearchEngine.Query(j.Term, sr.Negative)
 		if err != nil {
 			log.Println("Could not scrape:", err)
-			out <- j
+			continue
 		}
 		j.Ratio = float64(j.Positive) / float64(j.Negative)
 		msg := "\n"
@@ -69,25 +72,24 @@ func (sr *Srom) processQuery(in, out chan *job) {
 		msg += fmt.Sprintln("\t Ratio:", j.Ratio)
 		log.Println(msg)
 		sr.Storage.Write(j)
-		out <- j
 	}
-	log.Println("Bye")
 }
 
 func (sr *Srom) Run() {
-	in := make(chan *job)
-	out := make(chan *job)
+	queue := make(chan *job)
 	for i := 0; i < sr.MaxProcs; i++ {
-		log.Println("Starting processQuery()", i)
-		go sr.processQuery(in, out)
+		log.Println("Starting worker", i)
+		go sr.processQuery(queue)
 	}
 	for _, t := range sr.Terms {
 		j := new(job)
 		j.Term = t
 		log.Println("Queuing", t)
-		in <- j
+		queue <- j
 	}
-	for _ = range sr.Terms {
-		<-out
+	// Signal workers that there is no more work.
+	for i := 0; i < sr.MaxProcs; i++ {
+		log.Println("Quitting worker", i)
+		queue <- nil
 	}
 }
