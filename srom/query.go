@@ -21,23 +21,12 @@ var (
 	BadResponse = errors.New("Bad response code from server.")
 )
 
-func buildQuery(term string, templates []string) string {
-	q := fmt.Sprintf(templates[0], term)
-	q = fmt.Sprintf("\"%v\"", q)
-	for _, tmpl := range templates[1:] {
-		s := fmt.Sprintf(tmpl, term)
-		s = fmt.Sprintf(" OR \"%v\"", s)
-		q += s
-	}
-	return q
-}
-
 type GoogleSearch struct {
 	ApiKey         string
 	CustomSearchId string
 }
 
-func (gs *GoogleSearch) ServiceName() string {
+func (gs GoogleSearch) ServiceName() string {
 	return "Google Custom Search"
 }
 
@@ -90,7 +79,7 @@ type BingSearch struct {
 	Key        string
 }
 
-func (bs *BingSearch) ServiceName() string {
+func (bs BingSearch) ServiceName() string {
 	return "Azure Data Market"
 }
 

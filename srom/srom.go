@@ -6,6 +6,7 @@ package srom
 import (
 	"fmt"
 	"log"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -16,14 +17,25 @@ func init() {
 	log.SetFlags(log.Ltime | log.Lshortfile)
 }
 
+func New(terms []string, e *SearchEngine, s *Storage) *Srom {
+	sr := Srom{}
+	sr.Terms = terms
+	sr.Storage = s
+	sr.SearchEngine = e
+	sr.MaxProcs = runtime.NumCPU() * 4
+	sr.Positive = positiveTemplates
+	sr.Negative = negativeTemplates
+	return &sr
+}
+
 // Srom is a Sucks-Rules-O-Meter.
 type Srom struct {
-	Terms        []string     // List of terms to be evaluated
-	Positive     []string     // Templates for constructing positive queries
-	Negative     []string     // Templates for constructing negative queries
-	Storage      Storage      // S/R stats are written to Storage
-	SearchEngine SearchEngine // SearchEngine is used to query the internet
-	MaxProcs     int          // Maximum processQuery() goroutines
+	Terms        []string      // List of terms to be evaluated
+	Positive     []string      // Templates for constructing positive queries
+	Negative     []string      // Templates for constructing negative queries
+	Storage      *Storage      // S/R stats are written to Storage
+	SearchEngine *SearchEngine // SearchEngine is used to query the internet
+	MaxProcs     int           // Maximum processQuery() goroutines
 }
 
 type Storage interface {
@@ -51,14 +63,15 @@ func (sr *Srom) processQuery(queue chan *job) {
 			break
 		}
 		j.Timestamp = time.Now()
-		j.ServiceName = sr.SearchEngine.ServiceName()
+		se := *sr.SearchEngine
+		j.ServiceName = se.ServiceName()
 		var err error
-		j.Positive, err = sr.SearchEngine.Query(j.Term, sr.Positive)
+		j.Positive, err = se.Query(j.Term, sr.Positive)
 		if err != nil {
 			log.Println("Could not scrape:", err)
 			continue
 		}
-		j.Negative, err = sr.SearchEngine.Query(j.Term, sr.Negative)
+		j.Negative, err = se.Query(j.Term, sr.Negative)
 		if err != nil {
 			log.Println("Could not scrape:", err)
 			continue
@@ -71,7 +84,8 @@ func (sr *Srom) processQuery(queue chan *job) {
 		msg += fmt.Sprintln("\t Negative:", j.Negative)
 		msg += fmt.Sprintln("\t Ratio:", j.Ratio)
 		log.Println(msg)
-		sr.Storage.Write(j)
+		sto := *sr.Storage
+		sto.Write(j)
 	}
 }
 
@@ -92,4 +106,15 @@ func (sr *Srom) Run() {
 		log.Println("Quitting worker", i)
 		queue <- nil
 	}
+}
+
+func buildQuery(term string, templates []string) string {
+	q := fmt.Sprintf(templates[0], term)
+	q = fmt.Sprintf("\"%v\"", q)
+	for _, tmpl := range templates[1:] {
+		s := fmt.Sprintf(tmpl, term)
+		s = fmt.Sprintf(" OR \"%v\"", s)
+		q += s
+	}
+	return q
 }
