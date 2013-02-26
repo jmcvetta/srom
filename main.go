@@ -85,17 +85,15 @@ func main() {
 	terms := []string{
 		"ubuntu",
 		"obama",
-		/*
-			"linux",
-			"windows",
-			"apple",
-			"iPhone",
-			"android",
-			"iOS",
-			"ed lee",
-			"kate moss",
-			"richard stallman",
-		*/
+		"linux",
+		"windows",
+		"apple",
+		"iPhone",
+		"android",
+		"iOS",
+		"ed lee",
+		"kate moss",
+		"richard stallman",
 	}
 	sr := srom.New(terms, &sengine, &mongo)
 	//
