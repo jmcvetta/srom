@@ -4,11 +4,11 @@
 package main
 
 import (
+	"flag"
 	"github.com/darkhelmet/env"
 	"github.com/jmcvetta/srom/srom"
 	"labix.org/v2/mgo"
 	"log"
-	"runtime"
 )
 
 func init() {
@@ -16,6 +16,11 @@ func init() {
 }
 
 func main() {
+	//
+	// Parse Flags
+	//
+	useBing := flag.Bool("bing", false, "Use Bing search instead of Google")
+	flag.Parse()
 	//
 	// Setup MongoDB
 	//
@@ -53,61 +58,46 @@ func main() {
 	if err != nil {
 		log.Panic(err)
 	}
-	//
-	// Instantiate Srom Object
-	//
-	sr := srom.Srom{}
-	sr.Terms = []string{
-		"ubuntu",
-		"obama",
-		"linux",
-		"windows",
-		"apple",
-		"iPhone",
-		"android",
-		"iOS",
-		"ed lee",
-		"kate moss",
-		"richard stallman",
-	}
-	sr.Positive = []string{
-		"%v rules",
-		"%v rocks",
-		"%v is awesome",
-		"%v kicks ass",
-		"%v dominates",
-		"love %v",
-	}
-	sr.Negative = []string{
-		"%v sucks",
-		"%v blows",
-		"%v is worthless",
-		"%v is crap",
-		"%v doesn't work",
-		"hate %v",
-	}
-	sr.Storage = &srom.MongoStorage{
+	var mongo srom.Storage
+	mongo = &srom.MongoStorage{
 		Col: collection,
 	}
-	ncpu := runtime.NumCPU() * 4
-	runtime.GOMAXPROCS(ncpu)
-	sr.MaxProcs = ncpu
 	//
 	// Search engines
 	//
-	/*
-		sr.SearchEngine = &srom.GoogleSearch{
+	var sengine srom.SearchEngine
+	if *useBing {
+		log.Println("Using Bing search engine")
+		sengine = &srom.BingSearch{
+			CustomerId: env.String("AZURE_CUST_ID"),
+			Key:        env.String("AZURE_KEY"),
+		}
+	} else {
+		log.Println("Using Google search engine")
+		sengine = &srom.GoogleSearch{
 			ApiKey:         env.String("GOOGLE_API_KEY"),
 			CustomSearchId: env.String("GOOGLE_CUSTOM_SEARCH_ID"),
 		}
-	*/
-	sr.SearchEngine = &srom.BingSearch{
-		CustomerId: env.String("AZURE_CUST_ID"),
-		Key:        env.String("AZURE_KEY"),
 	}
-	// sr.ApiKey = env.String("GOOGLE_API_KEY")
-	// sr.CustomSearchId = env.String("GOOGLE_CUSTOM_SEARCH_ID")
-	// sr.Client = restclient.New()
+	//
+	// Instantiate Srom Object
+	//
+	terms := []string{
+		"ubuntu",
+		"obama",
+		/*
+			"linux",
+			"windows",
+			"apple",
+			"iPhone",
+			"android",
+			"iOS",
+			"ed lee",
+			"kate moss",
+			"richard stallman",
+		*/
+	}
+	sr := srom.New(terms, &sengine, &mongo)
 	//
 	// Run
 	//
