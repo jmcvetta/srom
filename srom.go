@@ -5,24 +5,17 @@ package srom
 
 import (
 	"fmt"
+	"launchpad.net/tomb"
 	"log"
 	"runtime"
 	"strings"
 	"time"
 )
 
-var ()
-
-func init() {
-	log.SetFlags(log.Ltime | log.Lshortfile)
-}
-
-func New(terms []string, e *SearchEngine, s *Storage) *Srom {
+func New(e *SearchEngine, o *Output) *Srom {
 	sr := Srom{}
-	sr.Terms = terms
-	sr.Storage = s
-	sr.SearchEngine = e
-	sr.MaxProcs = runtime.NumCPU() * 4
+	sr.Output = o
+	sr.MaxProcs = runtime.NumCPU()
 	sr.Positive = positiveTemplates
 	sr.Negative = negativeTemplates
 	return &sr
@@ -30,83 +23,103 @@ func New(terms []string, e *SearchEngine, s *Storage) *Srom {
 
 // Srom is a Sucks-Rules-O-Meter.
 type Srom struct {
-	Terms        []string      // List of terms to be evaluated
-	Positive     []string      // Templates for constructing positive queries
-	Negative     []string      // Templates for constructing negative queries
-	Storage      *Storage      // S/R stats are written to Storage
-	SearchEngine *SearchEngine // SearchEngine is used to query the internet
-	MaxProcs     int           // Maximum processQuery() goroutines
+	queue    chan string
+	Positive []string // Templates for constructing positive queries
+	Negative []string // Templates for constructing negative queries
+	Output   *Output  // S/R stats are written to Output
+	MaxProcs int      // Maximum processQuery() goroutines
+	t        *tomb.Tomb
 }
 
-type Storage interface {
-	Write(j *job) error
+// Add puts the provided term in the queue to be evaluted as sucking or rocking.
+func (s *Srom) Add(term string) {
 }
 
-type SearchEngine interface {
-	ServiceName() string
-	Query(term string, templates []string) (hits int, err error)
+// A Result summarizes the result of quering a term with a given search engine.
+type result struct {
+	SearchEngine string
+	PosCount     int
+	NegCount     int
+	Ratio        float64
 }
 
 type job struct {
-	Term        string
-	Timestamp   time.Time
-	ServiceName string
-	Positive    int
-	Negative    int
-	Ratio       float64
+	Term         string
+	Timestamp    time.Time
+	Ratio        float64
+	Results      []*result
+	PosTemplates []string
+	NegTemplates []string
 }
 
-func (sr *Srom) processQuery(queue chan *job) {
+type query struct {
+	s     string
+	e     SearchEngine
+	count int
+}
+
+type queryRunner struct {
+	queue *chan query
+	s     *Srom
+	t     *tomb.Tomb
+}
+
+func (qr *queryRunner) run() {
+	defer qr.t.Done()
 	for {
-		j := <-queue
-		if j == nil {
-			break
+		var q query
+		select {
+		case q = <-*qr.queue:
+			log.Println("Querying:\n\t", q.s)
+		case <-qr.t.Dying():
+			close(*qr.queue)
+			return
 		}
-		j.Timestamp = time.Now()
-		se := *sr.SearchEngine
-		j.ServiceName = se.ServiceName()
-		var err error
-		j.Positive, err = se.Query(j.Term, sr.Positive)
+		count, err := q.e.Query(q.s)
 		if err != nil {
-			log.Println("Could not scrape:", err)
-			continue
+			close(*qr.queue)
+			qr.t.Kill(err)
+			return
 		}
-		j.Negative, err = se.Query(j.Term, sr.Negative)
-		if err != nil {
-			log.Println("Could not scrape:", err)
-			continue
-		}
-		j.Ratio = float64(j.Positive) / float64(j.Negative)
-		msg := "\n"
-		msg += strings.Repeat("-", 80) + "\n"
-		msg += j.Term + "\n"
-		msg += fmt.Sprintln("\t Positive:", j.Positive)
-		msg += fmt.Sprintln("\t Negative:", j.Negative)
-		msg += fmt.Sprintln("\t Ratio:", j.Ratio)
-		log.Println(msg)
-		sto := *sr.Storage
-		sto.Write(j)
+
 	}
 }
+
+/*
+	j.Ratio = float64(j.Positive) / float64(j.Negative)
+	msg := "\n"
+	msg += strings.Repeat("-", 80) + "\n"
+	msg += j.Term + "\n"
+	msg += fmt.Sprintln("\t Positive:", j.Positive)
+	msg += fmt.Sprintln("\t Negative:", j.Negative)
+	msg += fmt.Sprintln("\t Ratio:", j.Ratio)
+	log.Println(msg)
+	out := *sr.Output
+	out.Write(j)
+*/
 
 func (sr *Srom) Run() {
-	queue := make(chan *job)
+	queue := make(chan query)
+	t := tomb.Tomb{}
 	for i := 0; i < sr.MaxProcs; i++ {
 		log.Println("Starting worker", i)
-		go sr.processQuery(queue)
+		r := queryRunner{
+			s:     sr,
+			queue: &queue,
+			t:     &t,
+		}
 	}
-	for _, t := range sr.Terms {
-		j := new(job)
-		j.Term = t
-		log.Println("Queuing", t)
-		queue <- j
-	}
-	// Signal workers that there is no more work.
+}
+
+/*
+// Stop signals workers that there is no more work.
+func (sr *Srom) Stop() {
 	for i := 0; i < sr.MaxProcs; i++ {
 		log.Println("Quitting worker", i)
 		queue <- nil
 	}
 }
+*/
 
 func buildQuery(term string, templates []string) string {
 	q := fmt.Sprintf(templates[0], term)

@@ -21,6 +21,11 @@ var (
 	BadResponse = errors.New("Bad response code from server.")
 )
 
+type SearchEngine interface {
+	ServiceName() string
+	Query(s string) (hits int, err error)
+}
+
 type GoogleSearch struct {
 	ApiKey         string
 	CustomSearchId string
@@ -30,8 +35,7 @@ func (gs GoogleSearch) ServiceName() string {
 	return "Google Custom Search"
 }
 
-func (gs *GoogleSearch) Query(term string, templates []string) (hits int, err error) {
-	query := buildQuery(term, templates)
+func (gs *GoogleSearch) Query(s string) (hits int, err error) {
 	u, err := url.Parse(googleSearchApi)
 	if err != nil {
 		return -1, err
@@ -39,7 +43,7 @@ func (gs *GoogleSearch) Query(term string, templates []string) (hits int, err er
 	v := url.Values{}
 	v.Set("key", gs.ApiKey)
 	v.Set("cx", gs.CustomSearchId)
-	v.Set("q", query)
+	v.Set("q", s)
 	u.RawQuery = v.Encode()
 	resp := struct {
 		Queries struct {
@@ -83,9 +87,8 @@ func (bs BingSearch) ServiceName() string {
 	return "Azure Data Market"
 }
 
-func (bs *BingSearch) Query(term string, templates []string) (hits int, err error) {
-	query := buildQuery(term, templates)
-	query = fmt.Sprintf("'%v'", query) // Enclose in single quote marks
+func (bs *BingSearch) Query(s string) (hits int, err error) {
+	query := fmt.Sprintf("'%v'", s) // Enclose in single quote marks
 	payload := map[string]string{
 		"Sources": "'web'", // Inner single quote marks are required
 		"$format": "json",  // Yes the $ prefix is correct

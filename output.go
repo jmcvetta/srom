@@ -7,6 +7,10 @@ import (
 	"labix.org/v2/mgo"
 )
 
+type Output interface {
+	Write(j *job) error
+}
+
 // MongoStorage allows SROM data to be persisted in a MongoDB collection.
 type MongoStorage struct {
 	Col *mgo.Collection
