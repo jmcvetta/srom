@@ -14,6 +14,7 @@ import (
 
 func New(engines []SearchEngine, o Output) *Srom {
 	sr := Srom{}
+	sr.queue = make(chan *job)
 	sr.Output = o
 	sr.Positive = positiveTemplates
 	sr.Negative = negativeTemplates
@@ -41,19 +42,23 @@ type Srom struct {
 
 // Add puts the provided term in the queue to be evaluted as sucking or rocking.
 func (s *Srom) Add(term string) {
+	log.Println("Add", term)
 	j := job{
 		Term: term,
 	}
 	s.queue <- &j
+	log.Println("Added", term)
 }
 
 func (sr *Srom) Run() {
+	log.Println("Start Run()")
 	jr := jobRunner{
 		s: sr,
 	}
 	for i := 0; i < sr.MaxRunners; i++ {
 		go jr.run()
 	}
+	log.Println("End Run()")
 }
 
 type jobRunner struct {
@@ -65,19 +70,21 @@ func (jr *jobRunner) run() {
 	log.Println("Starting job runner")
 	defer jr.t.Done()
 	for {
+		log.Println("For")
 		var j *job
 		select {
 		case j = <-jr.s.queue:
 			jr.processJob(j)
 		case <-jr.t.Dying():
-			close(jr.s.queue)
 			log.Println("Exiting job runner")
+			close(jr.s.queue)
 			return
 		}
 	}
 }
 
 func (jr *jobRunner) processJob(j *job) {
+	log.Println("Processing job", *j)
 	j.Timestamp = time.Now()
 	j.PosTemplates = jr.s.Positive
 	j.NegTemplates = jr.s.Negative
@@ -116,6 +123,7 @@ func (jr *jobRunner) processJob(j *job) {
 	//
 	// Write to output
 	//
+	log.Println("Output", *j)
 	err := jr.s.Output.Write(j)
 	if err != nil {
 		close(jr.s.queue)
