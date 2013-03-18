@@ -102,6 +102,5 @@ func main() {
 	//
 	// Run
 	//
-	sr.Run()
-	sr.Add("ubuntu")
+	sr.Query("ubuntu")
 }

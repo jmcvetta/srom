@@ -40,61 +40,19 @@ type Srom struct {
 	t          tomb.Tomb
 }
 
-// Add puts the provided term in the queue to be evaluted as sucking or rocking.
-func (s *Srom) Add(term string) {
-	log.Println("Add", term)
+func (sr *Srom) Query(term string) error {
+	log.Println("Querying term", term)
 	j := job{
 		Term: term,
+		Timestamp: time.Now(),
+		PosTemplates: sr.Positive,
+		NegTemplates: sr.Negative,
 	}
-	s.queue <- &j
-	log.Println("Added", term)
-}
-
-func (sr *Srom) Run() {
-	log.Println("Start Run()")
-	jr := jobRunner{
-		s: sr,
-	}
-	for i := 0; i < sr.MaxRunners; i++ {
-		go jr.run()
-	}
-	log.Println("End Run()")
-}
-
-type jobRunner struct {
-	s *Srom
-	t tomb.Tomb
-}
-
-func (jr *jobRunner) run() {
-	log.Println("Starting job runner")
-	defer jr.t.Done()
-	for {
-		log.Println("For")
-		var j *job
-		select {
-		case j = <-jr.s.queue:
-			jr.processJob(j)
-		case <-jr.t.Dying():
-			log.Println("Exiting job runner")
-			close(jr.s.queue)
-			return
-		}
-	}
-}
-
-func (jr *jobRunner) processJob(j *job) {
-	log.Println("Processing job", *j)
-	j.Timestamp = time.Now()
-	j.PosTemplates = jr.s.Positive
-	j.NegTemplates = jr.s.Negative
 	//
 	// Issue search engine queries async
 	//
-	queryCnt := len(jr.s.engines) * 2 // 1 pos and 1 neg query per search engine
-	wg := sync.WaitGroup{}
-	wg.Add(queryCnt)
-	for _, se := range jr.s.engines {
+	qr := queryRunner{}
+	for _, se := range sr.engines {
 		var pos int
 		var neg int
 		r := result{
@@ -103,14 +61,22 @@ func (jr *jobRunner) processJob(j *job) {
 			NegCount:     neg,
 		}
 		j.Results = append(j.Results, &r)
+		qr.wg.Add(2) // 1 pos and 1 neg query per search engine
 		// Positive
-		q := buildQuery(j.Term, jr.s.Positive)
-		go jr.runQuery(q, se, &pos, &wg)
+		q := buildQuery(j.Term, sr.Positive)
+		go qr.runQuery(q, se, &pos)
 		// Negative
-		q = buildQuery(j.Term, jr.s.Negative)
-		go jr.runQuery(q, se, &neg, &wg)
+		q = buildQuery(j.Term, sr.Negative)
+		go qr.runQuery(q, se, &neg)
 	}
-	wg.Wait()
+	go func() {
+		qr.wg.Wait()
+		qr.t.Done()
+	}()
+	err := qr.t.Wait()
+	if err != nil {
+		return err
+	}
 	//
 	// Calculate Ratio
 	//
@@ -123,22 +89,23 @@ func (jr *jobRunner) processJob(j *job) {
 	//
 	// Write to output
 	//
-	log.Println("Output", *j)
-	err := jr.s.Output.Write(j)
-	if err != nil {
-		close(jr.s.queue)
-		jr.t.Kill(err)
-		return
-	}
+	log.Println("Output", j)
+	err = sr.Output.Write(&j)
+	return err
 }
 
-func (jr *jobRunner) runQuery(q string, se SearchEngine, result *int, wg *sync.WaitGroup) {
+type queryRunner struct {
+	t tomb.Tomb
+	wg sync.WaitGroup
+}
+
+func (qr *queryRunner) runQuery(q string, se SearchEngine, result *int) {
 	log.Println("runQuery", se.ServiceName(), q)
-	defer wg.Done()
+	defer qr.wg.Done()
 	count, err := se.Query(q)
 	if err != nil {
-		close(jr.s.queue)
-		jr.t.Kill(err)
+		log.Println("Query failed:", err)
+		qr.t.Kill(err)
 		return
 	}
 	result = &count
