@@ -5,6 +5,7 @@ package srom
 
 import (
 	"labix.org/v2/mgo"
+	"log"
 )
 
 type Output interface {
@@ -18,4 +19,11 @@ type MongoStorage struct {
 
 func (m *MongoStorage) Write(j *job) error {
 	return m.Col.Insert(&j)
+}
+
+type LoggerOutput struct{}
+
+func (l *LoggerOutput) Write(j *job) error {
+	log.Println(j.Term, j.Ratio)
+	return nil
 }

@@ -8,31 +8,132 @@ import (
 	"launchpad.net/tomb"
 	"log"
 	"runtime"
-	"strings"
+	"sync"
 	"time"
 )
 
-func New(e *SearchEngine, o *Output) *Srom {
+func New(engines []SearchEngine, o Output) *Srom {
 	sr := Srom{}
 	sr.Output = o
-	sr.MaxProcs = runtime.NumCPU()
 	sr.Positive = positiveTemplates
 	sr.Negative = negativeTemplates
+	sr.engines = engines
+	queryCnt := len(sr.engines) * 2 // 1 pos and 1 neg query per search engine
+	mr := runtime.NumCPU() / queryCnt
+	if mr == 0 {
+		mr = 1 // Minimum 1 runner required
+	}
+	sr.MaxRunners = mr
 	return &sr
 }
 
 // Srom is a Sucks-Rules-O-Meter.
 type Srom struct {
-	queue    chan string
-	Positive []string // Templates for constructing positive queries
-	Negative []string // Templates for constructing negative queries
-	Output   *Output  // S/R stats are written to Output
-	MaxProcs int      // Maximum processQuery() goroutines
-	t        *tomb.Tomb
+	queue      chan *job
+	engines    []SearchEngine
+	queryCnt   int      // Number of queries that will be run per
+	Positive   []string // Templates for constructing positive queries
+	Negative   []string // Templates for constructing negative queries
+	Output     Output   // S/R stats are written to Output
+	MaxRunners int      // Maximum count of jobRunners
+	t          tomb.Tomb
 }
 
 // Add puts the provided term in the queue to be evaluted as sucking or rocking.
 func (s *Srom) Add(term string) {
+	j := job{
+		Term: term,
+	}
+	s.queue <- &j
+}
+
+func (sr *Srom) Run() {
+	jr := jobRunner{
+		s: sr,
+	}
+	for i := 0; i < sr.MaxRunners; i++ {
+		go jr.run()
+	}
+}
+
+type jobRunner struct {
+	s *Srom
+	t tomb.Tomb
+}
+
+func (jr *jobRunner) run() {
+	log.Println("Starting job runner")
+	defer jr.t.Done()
+	for {
+		var j *job
+		select {
+		case j = <-jr.s.queue:
+			jr.processJob(j)
+		case <-jr.t.Dying():
+			close(jr.s.queue)
+			log.Println("Exiting job runner")
+			return
+		}
+	}
+}
+
+func (jr *jobRunner) processJob(j *job) {
+	j.Timestamp = time.Now()
+	j.PosTemplates = jr.s.Positive
+	j.NegTemplates = jr.s.Negative
+	//
+	// Issue search engine queries async
+	//
+	queryCnt := len(jr.s.engines) * 2 // 1 pos and 1 neg query per search engine
+	wg := sync.WaitGroup{}
+	wg.Add(queryCnt)
+	for _, se := range jr.s.engines {
+		var pos int
+		var neg int
+		r := result{
+			SearchEngine: se.ServiceName(),
+			PosCount:     pos,
+			NegCount:     neg,
+		}
+		j.Results = append(j.Results, &r)
+		// Positive
+		q := buildQuery(j.Term, jr.s.Positive)
+		go jr.runQuery(q, se, &pos, &wg)
+		// Negative
+		q = buildQuery(j.Term, jr.s.Negative)
+		go jr.runQuery(q, se, &neg, &wg)
+	}
+	wg.Wait()
+	//
+	// Calculate Ratio
+	//
+	var sum float64
+	for _, r := range j.Results {
+		ratio := float64(r.PosCount) / float64(r.NegCount)
+		sum += ratio
+	}
+	j.Ratio = sum / float64(len(j.Results))
+	//
+	// Write to output
+	//
+	err := jr.s.Output.Write(j)
+	if err != nil {
+		close(jr.s.queue)
+		jr.t.Kill(err)
+		return
+	}
+}
+
+func (jr *jobRunner) runQuery(q string, se SearchEngine, result *int, wg *sync.WaitGroup) {
+	log.Println("runQuery", se.ServiceName(), q)
+	defer wg.Done()
+	count, err := se.Query(q)
+	if err != nil {
+		close(jr.s.queue)
+		jr.t.Kill(err)
+		return
+	}
+	result = &count
 }
 
 // A Result summarizes the result of quering a term with a given search engine.
@@ -40,7 +141,6 @@ type result struct {
 	SearchEngine string
 	PosCount     int
 	NegCount     int
-	Ratio        float64
 }
 
 type job struct {
@@ -51,75 +151,6 @@ type job struct {
 	PosTemplates []string
 	NegTemplates []string
 }
-
-type query struct {
-	s     string
-	e     SearchEngine
-	count int
-}
-
-type queryRunner struct {
-	queue *chan query
-	s     *Srom
-	t     *tomb.Tomb
-}
-
-func (qr *queryRunner) run() {
-	defer qr.t.Done()
-	for {
-		var q query
-		select {
-		case q = <-*qr.queue:
-			log.Println("Querying:\n\t", q.s)
-		case <-qr.t.Dying():
-			close(*qr.queue)
-			return
-		}
-		count, err := q.e.Query(q.s)
-		if err != nil {
-			close(*qr.queue)
-			qr.t.Kill(err)
-			return
-		}
-
-	}
-}
-
-/*
-	j.Ratio = float64(j.Positive) / float64(j.Negative)
-	msg := "\n"
-	msg += strings.Repeat("-", 80) + "\n"
-	msg += j.Term + "\n"
-	msg += fmt.Sprintln("\t Positive:", j.Positive)
-	msg += fmt.Sprintln("\t Negative:", j.Negative)
-	msg += fmt.Sprintln("\t Ratio:", j.Ratio)
-	log.Println(msg)
-	out := *sr.Output
-	out.Write(j)
-*/
-
-func (sr *Srom) Run() {
-	queue := make(chan query)
-	t := tomb.Tomb{}
-	for i := 0; i < sr.MaxProcs; i++ {
-		log.Println("Starting worker", i)
-		r := queryRunner{
-			s:     sr,
-			queue: &queue,
-			t:     &t,
-		}
-	}
-}
-
-/*
-// Stop signals workers that there is no more work.
-func (sr *Srom) Stop() {
-	for i := 0; i < sr.MaxProcs; i++ {
-		log.Println("Quitting worker", i)
-		queue <- nil
-	}
-}
-*/
 
 func buildQuery(term string, templates []string) string {
 	q := fmt.Sprintf(templates[0], term)

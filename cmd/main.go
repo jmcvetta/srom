@@ -6,7 +6,7 @@ package main
 import (
 	"flag"
 	"github.com/darkhelmet/env"
-	"github.com/jmcvetta/srom/srom"
+	"github.com/jmcvetta/srom"
 	"labix.org/v2/mgo"
 	"log"
 )
@@ -15,12 +15,7 @@ func init() {
 	log.SetFlags(log.Ltime | log.Lshortfile)
 }
 
-func main() {
-	//
-	// Parse Flags
-	//
-	useBing := flag.Bool("bing", false, "Use Bing search instead of Google")
-	flag.Parse()
+func setupMongoStorage() *srom.MongoStorage {
 	//
 	// Setup MongoDB
 	//
@@ -58,47 +53,55 @@ func main() {
 	if err != nil {
 		log.Panic(err)
 	}
-	var mongo srom.Storage
-	mongo = &srom.MongoStorage{
+	mongo := srom.MongoStorage{
 		Col: collection,
 	}
+	return &mongo
+}
+
+func main() {
+	//
+	// Parse Flags
+	//
+	// useBing := flag.Bool("bing", false, "Use Bing search instead of Google")
+	flag.Parse()
 	//
 	// Search engines
 	//
-	var sengine srom.SearchEngine
-	if *useBing {
-		log.Println("Using Bing search engine")
-		sengine = &srom.BingSearch{
-			CustomerId: env.String("AZURE_CUST_ID"),
-			Key:        env.String("AZURE_KEY"),
-		}
-	} else {
-		log.Println("Using Google search engine")
-		sengine = &srom.GoogleSearch{
-			ApiKey:         env.String("GOOGLE_API_KEY"),
-			CustomSearchId: env.String("GOOGLE_CUSTOM_SEARCH_ID"),
-		}
+	google := &srom.GoogleSearch{
+		ApiKey:         env.String("GOOGLE_API_KEY"),
+		CustomSearchId: env.String("GOOGLE_CUSTOM_SEARCH_ID"),
+	}
+	bing := &srom.BingSearch{
+		CustomerId: env.String("AZURE_CUST_ID"),
+		Key:        env.String("AZURE_KEY"),
+	}
+	engines := []srom.SearchEngine{
+		google,
+		bing,
 	}
 	//
 	// Instantiate Srom Object
 	//
-	terms := []string{
-		"ubuntu",
-		"obama",
-		"linux",
-		"windows",
-		"apple",
-		"iPhone",
-		"android",
-		"iOS",
-		"ed lee",
-		"kate moss",
-		"richard stallman",
-	}
-	sr := srom.New(terms, &sengine, &mongo)
+	/*
+		terms := []string{
+			"ubuntu",
+			"obama",
+			"linux",
+			"windows",
+			"apple",
+			"iPhone",
+			"android",
+			"iOS",
+			"ed lee",
+			"kate moss",
+			"richard stallman",
+		}
+	*/
+	sr := srom.New(engines, &srom.LoggerOutput{})
 	//
 	// Run
 	//
-	log.Println("Running SROM")
 	sr.Run()
+	sr.Add("ubuntu")
 }
