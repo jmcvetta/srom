@@ -7,8 +7,12 @@ import (
 	"flag"
 	"github.com/darkhelmet/env"
 	"github.com/jmcvetta/srom/srom"
+	"github.com/msbranco/goconfig"
 	"labix.org/v2/mgo"
 	"log"
+	"os"
+	"os/user"
+	"path/filepath"
 )
 
 func init() {
@@ -59,7 +63,71 @@ func setupMongoStorage() *srom.MongoStorage {
 	return &mongo
 }
 
+func getString(c *goconfig.ConfigFile, section, option string) string {
+	value, err := c.GetString(section, option)
+	if err != nil {
+		log.Println(section, ":", option)
+		log.Fatal(err)
+	}
+	if value == "" {
+		log.Fatalf("No value for option '%v' in section '%v'.", option, section)
+	}
+	return value
+}
+
 func main() {
+	//
+	// Config File
+	//
+	u, err := user.Current()
+	if err != nil {
+		log.Fatal(err)
+	}
+	confFolder := filepath.Join(u.HomeDir, ".config", "srom")
+	confFile := filepath.Join(confFolder, "srom.conf")
+	_, err = os.Stat(confFile)
+	if os.IsNotExist(err) {
+		os.MkdirAll(confFolder, 0700)
+		c := goconfig.NewConfigFile()
+		c.AddSection("google")
+		c.AddOption("google", "custom_search_id", "")
+		c.AddOption("google", "api_key", "")
+		c.AddSection("azure")
+		c.AddOption("azure", "customer_id", "")
+		c.AddOption("azure", "key", "")
+		header := "Sucks-Rules-O-Meter Configuration"
+		err = c.WriteConfigFile(confFile, 0600, header)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Println("Created new config file at", confFile)
+		log.Println("You will need to populate it with your API credentials")
+		return
+	}
+	engines := []srom.SearchEngine{}
+	c, err := goconfig.ReadConfigFile(confFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, section := range c.GetSections() {
+		//
+		// Google
+		//
+		if section == "google" {
+			google := srom.GoogleSearch{
+				ApiKey:         getString(c, "google", "api_key"),
+				CustomSearchId: getString(c, "google", "custom_search_id"),
+			}
+			engines = append(engines, &google)
+		}
+		if section == "azure" {
+			bing := srom.BingSearch{
+				CustomerId: getString(c, "azure", "customer_id"),
+				Key:        getString(c, "azure", "key"),
+			}
+			engines = append(engines, &bing)
+		}
+	}
 	//
 	// Parse Flags
 	//
@@ -71,18 +139,6 @@ func main() {
 	//
 	// Search engines
 	//
-	google := &srom.GoogleSearch{
-		ApiKey:         env.String("GOOGLE_API_KEY"),
-		CustomSearchId: env.String("GOOGLE_CUSTOM_SEARCH_ID"),
-	}
-	bing := &srom.BingSearch{
-		CustomerId: env.String("AZURE_CUST_ID"),
-		Key:        env.String("AZURE_KEY"),
-	}
-	engines := []srom.SearchEngine{
-		google,
-		bing,
-	}
 	//
 	// Instantiate Srom Object
 	//
