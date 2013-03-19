@@ -65,6 +65,9 @@ func main() {
 	//
 	// useBing := flag.Bool("bing", false, "Use Bing search instead of Google")
 	flag.Parse()
+	if flag.NArg() != 1 {
+		log.Fatal("Must supply one and only one argument")
+	}
 	//
 	// Search engines
 	//
@@ -103,5 +106,5 @@ func main() {
 	//
 	// Run
 	//
-	sr.Query("ubuntu")
+	sr.Query(flag.Arg(0))
 }
