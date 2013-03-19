@@ -1,6 +1,7 @@
 // Copyright (c) 2012-2013 Jason McVetta.  This is Free Software, released under
 // the terms of the AGPL v3.  http://www.gnu.org/licenses/agpl-3.0.html
 
+// A command line Sucks-Rules-O-Meter
 package main
 
 import (
