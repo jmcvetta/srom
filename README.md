@@ -52,3 +52,11 @@ more crippled, as it does not return hit count for a query.
 ## Status
 
 Works.  No tests (yet?)
+
+
+## Credits
+
+@dmarti first introduced me to - and perhaps invented? - the concept of a
+Sucks-Rules-O-Meter.  For the historically curious, his site hosts a defunct
+[Operating System SROM](http://srom.zgp.org/).
+
