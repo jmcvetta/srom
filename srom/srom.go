@@ -47,7 +47,7 @@ func (sr *Srom) Run() {
 	}
 }
 
-func (sr *Srom) queueTerm(term string) *job {
+func (sr *Srom) Query(term string) (ratio float64, err error) {
 	j := job{
 		Term: term,
 	}
@@ -77,11 +77,6 @@ func (sr *Srom) queueTerm(term string) *job {
 		sr.queries <- &posQ
 		sr.queries <- &negQ
 	}
-	return &j
-}
-
-func (sr *Srom) Query(term string) (ratio float64, err error) {
-	j := sr.queueTerm(term)
 	j.wg.Wait()
 	//
 	// Calculate Ratio
@@ -103,7 +98,7 @@ func (sr *Srom) Query(term string) (ratio float64, err error) {
 	//
 	// Write to output
 	//
-	err = sr.Output.Write(j)
+	err = sr.Output.Write(&j)
 	if err != nil {
 		return 0, err
 	}
