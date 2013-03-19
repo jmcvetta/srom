@@ -38,6 +38,17 @@ impact the reported ratio.
 See GoDoc for [automatic documentation](http://godoc.org/github.com/jmcvetta/srom).
 
 
+## Supported Search Engines
+
+Currently `srom` supports Google's crappy "Custom Search" API and Microsoft's
+likewise crappy Bing API.  Alas, both of these APIs returns hit counts orders
+of magnitude fewer than searches on their respective websites.  
+
+I would be happy to add support for other - perhaps less craptastic - search
+APIs.  Please alert me if you know of one.  Alas, Duck-Duck-Go's API is even
+more crippled, as it does not return hit count for a query.
+
+
 ## Status
 
 Works.  No tests (yet?)
