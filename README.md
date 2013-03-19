@@ -1,6 +1,4 @@
-# srom
-
-Sucks-Rules-O-Meter
+# Sucks-Rules-O-Meter
 
 `srom` is a command line tool, and accompanying library, that programmatically
 queries search engines to determine wether the internet thinks a given term
