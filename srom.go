@@ -21,7 +21,7 @@ func New(engines []SearchEngine, o Output) *Srom {
 	sr.Negative = negativeTemplates
 	sr.engines = engines
 	sr.MaxRunners = runtime.NumCPU()
-	sr.MaxRunners = 1
+	// sr.MaxRunners = 1
 	return &sr
 }
 
@@ -47,8 +47,10 @@ func (sr *Srom) Run() {
 	}
 }
 
-func (sr *Srom) queueJob(j *job) {
-	log.Println("queueJob", &j)
+func (sr *Srom) queueTerm(term string) *job {
+	j := job{
+		Term: term,
+	}
 	j.Timestamp = time.Now()
 	j.PosTemplates = sr.Positive
 	j.NegTemplates = sr.Negative
@@ -75,37 +77,28 @@ func (sr *Srom) queueJob(j *job) {
 		sr.queries <- &posQ
 		sr.queries <- &negQ
 	}
+	return &j
 }
 
 func (sr *Srom) Query(term string) error {
-	log.Println("Querying term", term)
-	j := job{
-		Term: term,
-	}
-	sr.queueJob(&j)
+	j := sr.queueTerm(term)
 	j.wg.Wait()
-	log.Println("done waiting")
-	for _, r := range j.Results {
-		log.Println(r.Positive)
-		log.Println(r.Positive.hits)
-		log.Println(r.Negative)
-		log.Println(r.Negative.hits)
-	}
 	//
 	// Calculate Ratio
 	//
 	var sum float64
 	for _, r := range j.Results {
-		// pos <- r.Positive.hits
-		ratio := float64(<-r.Positive.hits) / float64(<-r.Negative.hits)
+		pos := <-r.Positive.hits
+		neg := <-r.Negative.hits
+		ratio := float64(pos) / float64(neg)
 		sum += ratio
+		log.Printf("%30v %10v %5v %10f\n", r.SearchEngine, pos, neg, ratio)
 	}
 	j.Ratio = sum / float64(len(j.Results))
 	//
 	// Write to output
 	//
-	log.Println("Output", j)
-	err := sr.Output.Write(&j)
+	err := sr.Output.Write(j)
 	return err
 }
 
@@ -122,16 +115,13 @@ type queryRunner struct {
 }
 
 func (qr *queryRunner) run(id int) {
-	log.Println("Starting queryRunner", id)
 	for {
 		var q *query
 		select {
 		case <-qr.t.Dying():
-			log.Println("queryRunner", id, "dying")
 			close(qr.sr.queries)
 			return
 		case q = <-qr.sr.queries:
-			log.Println(q)
 		}
 		hits, err := q.se.Query(q.q)
 		if err != nil {
@@ -139,10 +129,8 @@ func (qr *queryRunner) run(id int) {
 			qr.t.Kill(err)
 			return
 		}
-		log.Println(hits)
-		q.wg.Done()
 		q.hits <- hits
-		log.Println("query runner done")
+		q.wg.Done()
 	}
 }
 
