@@ -35,6 +35,11 @@ request limit for the day.  The failure is handled gracefully, and does not
 impact the reported ratio.
 
 
+## Documentation
+
+See GoDoc for [automatic documentation](http://godoc.org/github.com/jmcvetta/srom).
+
+
 ## Status
 
 Works.  No tests (yet?)
