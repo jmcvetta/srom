@@ -48,7 +48,7 @@ func (sr *Srom) Run() {
 }
 
 // Query asks the internet for its opinion of a given term, returning the ratio
-// of favorable to unfavorable hits.
+// of unfavorable to favorable hits.
 func (sr *Srom) Query(term string) (ratio float64, err error) {
 	j := job{
 		Term: term,
@@ -88,8 +88,8 @@ func (sr *Srom) Query(term string) (ratio float64, err error) {
 	for _, r := range j.Results {
 		pos := <-r.Positive.hits
 		neg := <-r.Negative.hits
-		ratio := float64(pos) / float64(neg)
-		log.Printf("%30v %10v %5v %10f\n", r.SearchEngine, pos, neg, ratio)
+		ratio := float64(neg) / float64(pos)
+		log.Printf("%30v %10v %5v %10f\n", r.SearchEngine, neg, pos, ratio)
 		if pos == -1 || neg == -1 {
 			continue // One or both queries failed
 		}

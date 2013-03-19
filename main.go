@@ -144,5 +144,20 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("\nThe term '%v' has a rules/sucks ratio of %v\n\n", term, ratio)
+	fmt.Printf("\nThe term '%v' has a sucks/rules ratio of %v\n", term, ratio)
+	msg := fmt.Sprintf("The internet thinks '%v' ", term)
+	switch {
+	case ratio > 1:
+		msg += "SUCKS"
+	case ratio == 1:
+		msg += "neither sucks nor rocks.  Weird, eh?"
+	case ratio < 1:
+		msg += "ROCKS"
+	}
+	if ratio > 2 || ratio < 0.5 {
+		msg += " HARD"
+	}
+	msg += ".\n\n"
+	fmt.Printf(msg)
+
 }

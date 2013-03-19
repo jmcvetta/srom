@@ -22,9 +22,11 @@ engine, remove the other engine's section from the config file.
 ```
 $ srom 'johnny cash'
 20:39:08 srom.go:92:           Google Custom Search         -1    -1   1.000000
-20:39:08 srom.go:92:              Azure Data Market       2290   429   5.337995
+21:25:01 srom.go:92:              Azure Data Market        429  2290   0.187336
 
-The term 'johnny cash' has a rules/sucks ratio of 5.337995337995338
+The term 'johnny cash' has a sucks/rules ratio of 0.1873362445414847
+The internet thinks 'johnny cash' ROCKS HARD.
+
 
 ```
 
