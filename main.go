@@ -143,5 +143,5 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("\nThe term '%v' has a positive/negative ratio of %v\n\n", term, ratio)
+	fmt.Printf("\nThe term '%v' has a rules/sucks ratio of %v\n\n", term, ratio)
 }

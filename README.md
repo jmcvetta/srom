@@ -26,7 +26,7 @@ $ srom 'johnny cash'
 20:39:08 srom.go:92:           Google Custom Search         -1    -1   1.000000
 20:39:08 srom.go:92:              Azure Data Market       2290   429   5.337995
 
-The term 'johnny cash' has a positive/negative ratio of 5.337995337995338
+The term 'johnny cash' has a rules/sucks ratio of 5.337995337995338
 
 ```
 
