@@ -27,3 +27,10 @@ func (l *LoggerOutput) Write(j *job) error {
 	log.Println(j.Term, j.Ratio)
 	return nil
 }
+
+type NilOutput struct{}
+
+// No-op
+func (n *NilOutput) Write(j *job) error {
+	return nil
+}
