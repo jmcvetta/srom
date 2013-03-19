@@ -1,6 +1,7 @@
 // Copyright (c) 2012-2013 Jason McVetta.  This is Free Software, released under
 // the terms of the AGPL v3.  http://www.gnu.org/licenses/agpl-3.0.html
 
+// Package srom is a Sucks-Rules-O-Meter
 package srom
 
 import (
@@ -14,7 +15,6 @@ import (
 
 func New(engines []SearchEngine, o Output) *Srom {
 	sr := Srom{}
-	sr.jobs = make(chan *job)
 	sr.queries = make(chan *query)
 	sr.Output = o
 	sr.Positive = positiveTemplates
@@ -27,7 +27,6 @@ func New(engines []SearchEngine, o Output) *Srom {
 
 // Srom is a Sucks-Rules-O-Meter.
 type Srom struct {
-	jobs       chan *job
 	queries    chan *query
 	engines    []SearchEngine
 	queryCnt   int      // Number of queries that will be run per
@@ -38,6 +37,7 @@ type Srom struct {
 	t          tomb.Tomb
 }
 
+// Run starts up a pool of query runners.
 func (sr *Srom) Run() {
 	qr := queryRunner{
 		sr: sr,
@@ -47,6 +47,8 @@ func (sr *Srom) Run() {
 	}
 }
 
+// Query asks the internet for its opinion of a given term, returning the ratio
+// of favorable to unfavorable hits.
 func (sr *Srom) Query(term string) (ratio float64, err error) {
 	j := job{
 		Term: term,
@@ -136,7 +138,7 @@ func (qr *queryRunner) run(id int) {
 	}
 }
 
-// A Result summarizes the result of quering a term with a given search engine.
+// A Result encapsulates the results of querying a term
 type result struct {
 	SearchEngine string
 	Positive     query
