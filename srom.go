@@ -80,7 +80,7 @@ func (sr *Srom) queueTerm(term string) *job {
 	return &j
 }
 
-func (sr *Srom) Query(term string) error {
+func (sr *Srom) Query(term string) (ratio float64, err error) {
 	j := sr.queueTerm(term)
 	j.wg.Wait()
 	//
@@ -98,8 +98,11 @@ func (sr *Srom) Query(term string) error {
 	//
 	// Write to output
 	//
-	err := sr.Output.Write(j)
-	return err
+	err = sr.Output.Write(j)
+	if err != nil {
+		return 0, err
+	}
+	return j.Ratio, nil
 }
 
 type query struct {
