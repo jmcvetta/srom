@@ -5,6 +5,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/darkhelmet/env"
 	"github.com/jmcvetta/srom/srom"
 	"github.com/msbranco/goconfig"
@@ -14,10 +15,6 @@ import (
 	"os/user"
 	"path/filepath"
 )
-
-func init() {
-	log.SetFlags(log.Ltime | log.Lshortfile)
-}
 
 func setupMongoStorage() *srom.MongoStorage {
 	//
@@ -76,6 +73,7 @@ func getString(c *goconfig.ConfigFile, section, option string) string {
 }
 
 func main() {
+	log.SetFlags(log.Ltime | log.Lshortfile) // Ought to be controlled with a flag
 	//
 	// Config File
 	//
@@ -131,36 +129,19 @@ func main() {
 	//
 	// Parse Flags
 	//
-	// useBing := flag.Bool("bing", false, "Use Bing search instead of Google")
 	flag.Parse()
 	if flag.NArg() != 1 {
 		log.Fatal("Must supply one and only one argument")
 	}
 	//
-	// Search engines
+	// Run Query
 	//
-	//
-	// Instantiate Srom Object
-	//
-	/*
-		terms := []string{
-			"ubuntu",
-			"obama",
-			"linux",
-			"windows",
-			"apple",
-			"iPhone",
-			"android",
-			"iOS",
-			"ed lee",
-			"kate moss",
-			"richard stallman",
-		}
-	*/
-	sr := srom.New(engines, &srom.LoggerOutput{})
+	sr := srom.New(engines, &srom.NilOutput{})
 	sr.Run()
-	//
-	// Run
-	//
-	sr.Query(flag.Arg(0))
+	term := flag.Arg(0)
+	ratio, err := sr.Query(term)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("\nThe term '%v' has a positive/negative ratio of %v\n\n", term, ratio)
 }
