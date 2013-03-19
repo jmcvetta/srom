@@ -14,23 +14,21 @@ import (
 
 func New(engines []SearchEngine, o Output) *Srom {
 	sr := Srom{}
-	sr.queue = make(chan *job)
+	sr.jobs = make(chan *job)
+	sr.queries = make(chan *query)
 	sr.Output = o
 	sr.Positive = positiveTemplates
 	sr.Negative = negativeTemplates
 	sr.engines = engines
-	queryCnt := len(sr.engines) * 2 // 1 pos and 1 neg query per search engine
-	mr := runtime.NumCPU() / queryCnt
-	if mr == 0 {
-		mr = 1 // Minimum 1 runner required
-	}
-	sr.MaxRunners = mr
+	sr.MaxRunners = runtime.NumCPU()
+	sr.MaxRunners = 1
 	return &sr
 }
 
 // Srom is a Sucks-Rules-O-Meter.
 type Srom struct {
-	queue      chan *job
+	jobs       chan *job
+	queries    chan *query
 	engines    []SearchEngine
 	queryCnt   int      // Number of queries that will be run per
 	Positive   []string // Templates for constructing positive queries
@@ -40,49 +38,66 @@ type Srom struct {
 	t          tomb.Tomb
 }
 
+func (sr *Srom) Run() {
+	qr := queryRunner{
+		sr: sr,
+	}
+	for i := 0; i < sr.MaxRunners; i++ {
+		go qr.run(i)
+	}
+}
+
+func (sr *Srom) queueJob(j *job) {
+	log.Println("queueJob", &j)
+	j.Timestamp = time.Now()
+	j.PosTemplates = sr.Positive
+	j.NegTemplates = sr.Negative
+	for _, se := range sr.engines {
+		posQ := query{
+			wg:   &j.wg,
+			se:   se,
+			q:    buildQuery(j.Term, sr.Positive),
+			hits: make(chan int, 1),
+		}
+		negQ := query{
+			wg:   &j.wg,
+			se:   se,
+			q:    buildQuery(j.Term, sr.Negative),
+			hits: make(chan int, 1),
+		}
+		r := result{
+			SearchEngine: se.ServiceName(),
+			Positive:     posQ,
+			Negative:     negQ,
+		}
+		j.Results = append(j.Results, &r)
+		j.wg.Add(2) // 1 pos and 1 neg query per search engine
+		sr.queries <- &posQ
+		sr.queries <- &negQ
+	}
+}
+
 func (sr *Srom) Query(term string) error {
 	log.Println("Querying term", term)
 	j := job{
 		Term: term,
-		Timestamp: time.Now(),
-		PosTemplates: sr.Positive,
-		NegTemplates: sr.Negative,
 	}
-	//
-	// Issue search engine queries async
-	//
-	qr := queryRunner{}
-	for _, se := range sr.engines {
-		var pos int
-		var neg int
-		r := result{
-			SearchEngine: se.ServiceName(),
-			PosCount:     pos,
-			NegCount:     neg,
-		}
-		j.Results = append(j.Results, &r)
-		qr.wg.Add(2) // 1 pos and 1 neg query per search engine
-		// Positive
-		q := buildQuery(j.Term, sr.Positive)
-		go qr.runQuery(q, se, &pos)
-		// Negative
-		q = buildQuery(j.Term, sr.Negative)
-		go qr.runQuery(q, se, &neg)
-	}
-	go func() {
-		qr.wg.Wait()
-		qr.t.Done()
-	}()
-	err := qr.t.Wait()
-	if err != nil {
-		return err
+	sr.queueJob(&j)
+	j.wg.Wait()
+	log.Println("done waiting")
+	for _, r := range j.Results {
+		log.Println(r.Positive)
+		log.Println(r.Positive.hits)
+		log.Println(r.Negative)
+		log.Println(r.Negative.hits)
 	}
 	//
 	// Calculate Ratio
 	//
 	var sum float64
 	for _, r := range j.Results {
-		ratio := float64(r.PosCount) / float64(r.NegCount)
+		// pos <- r.Positive.hits
+		ratio := float64(<-r.Positive.hits) / float64(<-r.Negative.hits)
 		sum += ratio
 	}
 	j.Ratio = sum / float64(len(j.Results))
@@ -90,32 +105,52 @@ func (sr *Srom) Query(term string) error {
 	// Write to output
 	//
 	log.Println("Output", j)
-	err = sr.Output.Write(&j)
+	err := sr.Output.Write(&j)
 	return err
 }
 
-type queryRunner struct {
-	t tomb.Tomb
-	wg sync.WaitGroup
+type query struct {
+	q    string
+	hits chan int
+	se   SearchEngine
+	wg   *sync.WaitGroup
 }
 
-func (qr *queryRunner) runQuery(q string, se SearchEngine, result *int) {
-	log.Println("runQuery", se.ServiceName(), q)
-	defer qr.wg.Done()
-	count, err := se.Query(q)
-	if err != nil {
-		log.Println("Query failed:", err)
-		qr.t.Kill(err)
-		return
+type queryRunner struct {
+	t  tomb.Tomb
+	sr *Srom
+}
+
+func (qr *queryRunner) run(id int) {
+	log.Println("Starting queryRunner", id)
+	for {
+		var q *query
+		select {
+		case <-qr.t.Dying():
+			log.Println("queryRunner", id, "dying")
+			close(qr.sr.queries)
+			return
+		case q = <-qr.sr.queries:
+			log.Println(q)
+		}
+		hits, err := q.se.Query(q.q)
+		if err != nil {
+			log.Println("Query failed:", err)
+			qr.t.Kill(err)
+			return
+		}
+		log.Println(hits)
+		q.wg.Done()
+		q.hits <- hits
+		log.Println("query runner done")
 	}
-	result = &count
 }
 
 // A Result summarizes the result of quering a term with a given search engine.
 type result struct {
 	SearchEngine string
-	PosCount     int
-	NegCount     int
+	Positive     query
+	Negative     query
 }
 
 type job struct {
@@ -125,6 +160,7 @@ type job struct {
 	Results      []*result
 	PosTemplates []string
 	NegTemplates []string
+	wg           sync.WaitGroup
 }
 
 func buildQuery(term string, templates []string) string {

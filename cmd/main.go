@@ -99,6 +99,7 @@ func main() {
 		}
 	*/
 	sr := srom.New(engines, &srom.LoggerOutput{})
+	sr.Run()
 	//
 	// Run
 	//
