@@ -5,6 +5,7 @@ package srom
 import (
 	"github.com/bmizerany/assert"
 	"github.com/jmcvetta/randutil"
+	"strings"
 	"testing"
 )
 
@@ -19,37 +20,34 @@ func TestBuildQuery(t *testing.T) {
 	assert.Equal(t, expected, s)
 }
 
-type DummySearchEngine struct {
-	A int // Returned as hits on first call to Query()
-	B int // Returned as hits on second call to Query()
-	s bool
+type dummySearchEngine struct {
+	Sucks int
+	Rules int
 }
 
-func (d *DummySearchEngine) ServiceName() string {
+func (d *dummySearchEngine) ServiceName() string {
 	return "Dummy search engine"
 }
 
-func (d *DummySearchEngine) Query(s string) (hits int, err error) {
-	if d.s {
-		d.s = false
-		return d.B, nil
+func (d *dummySearchEngine) Query(s string) (hits int, err error) {
+	if strings.Contains(s, "rules") {
+		return d.Rules, nil
 	}
-	d.s = true
-	return d.A, nil
+	return d.Sucks, nil
 }
 
 func TestQuery(t *testing.T) {
-	pos0, _ := randutil.IntRange(0, 999999999)
-	neg0, _ := randutil.IntRange(0, 999999999)
-	pos1, _ := randutil.IntRange(0, 999999999)
-	neg1, _ := randutil.IntRange(0, 999999999)
-	dse0 := DummySearchEngine{
-		A: pos0,
-		B: neg0,
+	rules0, _ := randutil.IntRange(0, 999999)
+	sucks0, _ := randutil.IntRange(0, 999999)
+	rules1, _ := randutil.IntRange(0, 999999)
+	sucks1, _ := randutil.IntRange(0, 999999)
+	dse0 := dummySearchEngine{
+		Rules: int(rules0),
+		Sucks: int(sucks0),
 	}
-	dse1 := DummySearchEngine{
-		A: pos1,
-		B: neg1,
+	dse1 := dummySearchEngine{
+		Rules: int(rules1),
+		Sucks: int(sucks1),
 	}
 	engines := []SearchEngine{
 		&dse0,
@@ -61,8 +59,8 @@ func TestQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r0 := float64(neg0) / float64(pos0)
-	r1 := float64(neg1) / float64(pos1)
+	r0 := float64(sucks0) / float64(rules0)
+	r1 := float64(sucks1) / float64(rules1)
 	expected := (r0 + r1) / 2.0
 	assert.Equal(t, expected, ratio)
 }
