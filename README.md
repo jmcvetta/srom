@@ -53,7 +53,7 @@ more crippled, as it does not return hit count for a query.
 
 ## Status
 
-Works.  No tests (yet?)
+[![Build Status](https://drone.io/github.com/jmcvetta/srom/status.png)](https://drone.io/github.com/jmcvetta/srom/latest)
 
 
 ## Credits
