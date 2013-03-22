@@ -21,18 +21,13 @@ engine, remove the other engine's section from the config file.
 
 ```
 $ srom 'johnny cash'
-20:39:08 srom.go:92:           Google Custom Search         -1    -1   1.000000
-21:25:01 srom.go:92:              Azure Data Market        429  2290   0.187336
+16:31:41 srom.go:92:              Azure Data Market        435  3030   0.143564
+16:31:41 srom.go:92:           Google Custom Search         92  5540   0.016606
 
-The term 'johnny cash' has a sucks/rules ratio of 0.1873362445414847
+The term 'johnny cash' has a sucks/rules ratio of 0.0800854273152947
 The internet thinks 'johnny cash' ROCKS HARD.
 
-
 ```
-
-In the example shown, the call to Google has failed because we are over the API
-request limit for the day.  The failure is handled gracefully, and does not
-impact the reported ratio.
 
 
 ## Documentation
