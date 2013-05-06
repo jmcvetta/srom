@@ -55,7 +55,7 @@ func (gs *GoogleSearch) Query(s string) (hits int, err error) {
 	e := new(interface{})
 	req := restclient.RequestResponse{
 		Url:    u.String(),
-		Method: restclient.GET,
+		Method: "GET",
 		Result: &resp,
 		Error:  e,
 	}
@@ -103,7 +103,7 @@ func (bs *BingSearch) Query(s string) (hits int, err error) {
 	}{}
 	req := restclient.RequestResponse{
 		Url:      bingSearchApi,
-		Method:   restclient.GET,
+		Method:   "GET",
 		Userinfo: url.UserPassword(bs.CustomerId, bs.Key),
 		Params:   payload,
 		Result:   &resp,
